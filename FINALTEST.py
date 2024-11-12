@@ -1,7 +1,9 @@
 import RPi.GPIO as GPIO
+import cv2
 import time
 import spidev
 import numpy as np
+
 
 # Cau hinh GPIO va cac thong so LCD
 LCD_PINS = {'RS': 23, 'E': 27, 'D4': 18, 'D5': 17, 'D6': 14, 'D7': 3, 'BL': 2}
@@ -122,7 +124,12 @@ def update_lcd(available_slots):
     lcd_clear()
     message = f"Available: {available_slots}"
     lcd_display_string(message, 1)
-
+    if available_slots == 0:
+        lcd_display_string("Bai da day", 2)  # Thông báo ở dòng 2 khi hết chỗ
+    elif available_slots == 64:
+        lcd_display_string("Khong co xe", 2) 
+    else:
+        lcd_display_string("Bai con cho", 2)  # Xóa dòng 2 nếu còn chỗ trống
 
 # Hàm đo khoảng cách từ cảm biến siêu âm
 def measure_distance():
@@ -151,7 +158,7 @@ def measure_distance():
 def car_enter():
     global available_slots
     if available_slots == 0:
-        lcd_display_string("Bai da day", 1)  # Hien thi thong bao nhac nho nguoi dung
+        lcd_display_string("Bai da day", 2)  # Hien thi thong bao nhac nho nguoi dung
         time.sleep(2)  # Thoi gian cho de doc thong bao
         return
     distance = measure_distance()
@@ -172,7 +179,7 @@ def car_enter():
 def car_exit():
     global available_slots
     if available_slots == total_slots:
-        lcd_display_string("Bai trong", 1)  # hien thi thong bao nhac nho nguoi dung
+        lcd_display_string("Bai trong", 2)  # hien thi thong bao nhac nho nguoi dung
         time.sleep(2)  # Thoi gian cho de doc thong bao
         return
     for row in range(8):
