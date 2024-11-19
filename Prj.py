@@ -64,7 +64,8 @@ def preprocess_image(image):
 # Hàm trích xuất biển số từ ảnh
 def extract_license_plate(image):
     processed = preprocess_image(image)
-    contours, _ = cv2.findContours(processed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # Thay đổi để xử lý 3 giá trị trả về từ cv2.findContours
+    contours, _ = cv2.findContours(processed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[-2:]
     for contour in contours:
         # Xác định vùng bao quanh (bounding box)
         x, y, w, h = cv2.boundingRect(contour)
@@ -74,7 +75,7 @@ def extract_license_plate(image):
             plate_resized = cv2.resize(plate, (400, 100))  # Chuẩn hóa kích thước
             return pytesseract.image_to_string(plate_resized, config='--psm 7').strip()
     return None
-
+    
 # Hàm lưu ảnh
 def save_image(slot, image, is_entry=True):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
