@@ -18,6 +18,10 @@ E_PULSE = 0.0005
 E_DELAY = 0.0005
 LCD_LINE_1 = 0x80
 LCD_LINE_2 = 0xC0
+# dong co dc
+PWM_PIN = 24  # Chân GPIO cho tín hiệu PWM (Điều khiển tốc độ động cơ)
+DIR_PIN = 25  # Chân GPIO cho tín hiệu điều khiển hướng động cơ
+
 
 # Khởi tạo SPI cho LED matrix
 spi = spidev.SpiDev()
@@ -36,11 +40,32 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.setup(BTS["BT1"], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(BTS["BT2"], GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# Cấu hình các chân của cảm biến khoảng cách
 GPIO.setup(TRIG_PIN, GPIO.OUT)
 GPIO.setup(ECHO_PIN, GPIO.IN)
-GPIO.setup(SERVO_PIN, GPIO.OUT)
-servo = GPIO.PWM(SERVO_PIN, 50)
-servo.start(0)
+# cau hinh dong co dc
+GPIO.setup(PWM_PIN, GPIO.OUT)
+GPIO.setup(DIR_PIN, GPIO.OUT)
+# Khởi tạo tín hiệu PWM với tần số 1000Hz
+pwm = GPIO.PWM(PWM_PIN, 1000)
+pwm.start(0)  # Bắt đầu PWM với độ rộng xung ban đầu là 0%
+speed = 50 # Tốc độ động cơ
+# Cau hinh cong Servo
+GPIO.setup(SERVO_PIN, GPIO.OUT)  # Dong co Servo
+servo = GPIO.PWM(SERVO_PIN, 50)  # PWM cho Servo voi tan so 50Hz
+servo.start(0)  # Bat dau voi chu ky 0 (cong ban dau dong)
+# Đặt trạng thái ban đầu cho chân DIR_PIN
+GPIO.output(DIR_PIN, 0)  # Hướng động cơ mặc định (không có tín hiệu)
+
+# Hàm điều khiển động cơ (tốc độ và hướng)
+def motor_control(speed, direction):
+    GPIO.output(DIR_PIN, direction)  # Điều khiển hướng động cơ
+    if direction == 0:  # Nếu hướng là tiến
+        speed = speed  # Tốc độ giữ nguyên
+    else:  # Nếu hướng là lùi
+        speed = 100 - speed  # Đảo ngược tốc độ
+    pwm.ChangeDutyCycle(speed)  # Cập nhật độ rộng xung PWM để điều chỉnh tốc độ động cơ
+
 
 # Tạo thư mục lưu ảnh nếu chưa tồn tại
 if not os.path.exists(SAVE_PATH):
@@ -76,6 +101,53 @@ def max7219_init():
 def update_matrix():
     for row in range(8):
         max7219_write(row + 1, parking_lot[row])
+
+# Khoi tao man hinh LCD
+def lcd_init():
+    for pin in LCD_PINS.values():
+        GPIO.setup(pin, GPIO.OUT)
+    for byte in [0x33, 0x32, 0x28, 0x0C, 0x06, 0x01]:
+        lcd_byte(byte, LCD_CMD)
+    GPIO.output(LCD_PINS["BL"], True)
+
+# Ham xoa LCD
+def lcd_clear():
+    lcd_byte(0x01, LCD_CMD)
+
+# Ham gui byte lenh hoac du lieu den LCD
+def lcd_byte(bits, mode):
+    GPIO.output(LCD_PINS['RS'], mode)
+    for bit_num in range(4):
+        GPIO.output(LCD_PINS[f'D{bit_num + 4}'], bits & (1 << (4 + bit_num)) != 0)
+    time.sleep(E_DELAY)
+    GPIO.output(LCD_PINS['E'], True)
+    time.sleep(E_PULSE)
+    GPIO.output(LCD_PINS['E'], False)
+    time.sleep(E_DELAY)
+    for bit_num in range(4):
+        GPIO.output(LCD_PINS[f'D{bit_num + 4}'], bits & (1 << bit_num) != 0)
+    time.sleep(E_DELAY)
+    GPIO.output(LCD_PINS['E'], True)
+    time.sleep(E_PULSE)
+    GPIO.output(LCD_PINS['E'], False)
+    time.sleep(E_DELAY)
+# Ham hien thi chuoi len LCD
+def lcd_display_string(message, line):
+    lcd_byte(LCD_LINE_1 if line == 1 else LCD_LINE_2, LCD_CMD)
+    for char in message:
+        lcd_byte(ord(char), LCD_CHR)
+
+# Ham cap nhat so luong cho trong hien thi tren LCD
+def update_lcd(available_slots):
+    lcd_clear()
+    message = f"Available: {available_slots}"
+    lcd_display_string(message, 1)
+    if available_slots == 0:
+        lcd_display_string("Bai da day", 2)  # Thông báo ở dòng 2 khi hết chỗ
+    elif available_slots == 64:
+        lcd_display_string("Khong co xe", 2)
+    else:
+        lcd_display_string("Bai con cho", 2)  # Xóa dòng 2 nếu còn chỗ trống
 
 # Đo khoảng cách từ cảm biến siêu âm
 def measure_distance():
@@ -133,10 +205,13 @@ def car_enter():
                     parking_lot[row] &= ~(1 << (7 - col))
                     slot = row * 8 + col  # Tính vị trí của xe
                     capture_image(slot)  # Chụp ảnh xe
-                    available_slots -= 1
-                    update_matrix()
-                    open_gate()
+                    available_slots -= 1 # Giam so cho trong
+                    update_matrix() # Cap nhat ma tran LED
+                    update_lcd(available_slots)  # Cap nhat LCD
+                    open_gate() # Mo cong
+                    motor_control(speed, 0) #mophong xe đang vao
                     time.sleep(2)
+                    motor_control(0, 0)#dung dong co
                     close_gate()
                     return
 
@@ -152,16 +227,20 @@ def car_exit():
                 parking_lot[row] |= (1 << (7 - col))
                 slot = row * 8 + col  # Tính vị trí của xe
                 delete_image(slot)  # Xóa ảnh xe
-                available_slots += 1
-                update_matrix()
+                available_slots += 1 # Tang so cho trong
+                update_matrix() # Cap nhat ma tran LED
+                update_lcd(available_slots)  # Cap nhat LCD
                 open_gate()
+                motor_control(speed, 1)  # mophong xe đang ra
                 time.sleep(2)
+                motor_control(0, 1) # dung dong co
                 close_gate()
                 return
 
 # Chương trình chính
 def main():
     max7219_init()  # Khởi tạo LED matrix
+    lcd_init()  # Khởi tạo màn hình LCD
     try:
         while True:
             if GPIO.input(BTS["BT1"]) == GPIO.LOW:
@@ -170,7 +249,9 @@ def main():
                 car_exit()
             time.sleep(0.1)
     except KeyboardInterrupt:
+        GPIO.setmode(GPIO.BCM)  # Đặt lại chế độ đánh số chân GPIO
         servo.stop()
+        lcd_clear()
         GPIO.cleanup()
         max7219_write(0x0C, 0x00)  # Tắt LED matrix
 
