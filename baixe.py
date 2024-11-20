@@ -53,6 +53,7 @@ GPIO.setup(DIR_PIN, GPIO.OUT)
 GPIO.setup(RELAY_1, GPIO.OUT)  # Cấu hình Relay 1 là đầu ra
 GPIO.setup(RELAY_2, GPIO.OUT)  # Cấu hình Relay 2 là đầu ra
 GPIO.setup(LIGHT_SS, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Cảm biến ánh sáng là đầu vào, kéo lên mức cao mặc định
+
 # Khởi tạo tín hiệu PWM với tần số 1000Hz
 pwm = GPIO.PWM(PWM_PIN, 1000)
 pwm.start(0)  # Bắt đầu PWM với độ rộng xung ban đầu là 0%
@@ -248,8 +249,16 @@ def car_exit():
 def main():
     max7219_init()  # Khởi tạo LED matrix
     lcd_init()  # Khởi tạo màn hình LCD
+    GPIO.setup(LIGHT_SS, GPIO.IN, GPIO.PUD_UP)  # Cấu hình cảm biến ánh sáng
     try:
         while True:
+            if GPIO.input(LIGHT_SS) == 0:  # Kiểm tra nếu môi trường sáng (cảm biến ở mức thấp)
+                GPIO.output(RELAY_1, GPIO.LOW)  # Tắt Relay 1
+                GPIO.output(RELAY_2, GPIO.LOW)  # Tắt Relay 2
+            else:  # Nếu môi trường tối (cảm biến ở mức cao)
+                GPIO.output(RELAY_1, GPIO.HIGH)  # Bật Relay 1
+                time.sleep(1)  # Chờ 1 giây
+                GPIO.output(RELAY_2, GPIO.HIGH)  # Bật Relay 2
             if GPIO.input(BTS["BT1"]) == GPIO.LOW:
                 car_enter()
             elif GPIO.input(BTS["BT2"]) == GPIO.LOW:
