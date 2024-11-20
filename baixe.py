@@ -21,7 +21,10 @@ LCD_LINE_2 = 0xC0
 # dong co dc
 PWM_PIN = 24  # Chân GPIO cho tín hiệu PWM (Điều khiển tốc độ động cơ)
 DIR_PIN = 25  # Chân GPIO cho tín hiệu điều khiển hướng động cơ
-
+# Cấu hình các chân relay và cảm biến ánh sáng
+RELAY_1 = 12  # Relay 1 điều khiển thiết bị đầu tiên
+RELAY_2 = 16  # Relay 2 điều khiển thiết bị thứ hai
+LIGHT_SS = 5  # Cảm biến ánh sáng gắn vào chân GPIO 5
 
 # Khởi tạo SPI cho LED matrix
 spi = spidev.SpiDev()
@@ -46,6 +49,10 @@ GPIO.setup(ECHO_PIN, GPIO.IN)
 # cau hinh dong co dc
 GPIO.setup(PWM_PIN, GPIO.OUT)
 GPIO.setup(DIR_PIN, GPIO.OUT)
+# Cấu hình chế độ và trạng thái ban đầu cho các chân relay và cảm biến ánh sáng
+GPIO.setup(RELAY_1, GPIO.OUT)  # Cấu hình Relay 1 là đầu ra
+GPIO.setup(RELAY_2, GPIO.OUT)  # Cấu hình Relay 2 là đầu ra
+GPIO.setup(LIGHT_SS, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Cảm biến ánh sáng là đầu vào, kéo lên mức cao mặc định
 # Khởi tạo tín hiệu PWM với tần số 1000Hz
 pwm = GPIO.PWM(PWM_PIN, 1000)
 pwm.start(0)  # Bắt đầu PWM với độ rộng xung ban đầu là 0%
