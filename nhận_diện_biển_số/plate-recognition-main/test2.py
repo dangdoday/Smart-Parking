@@ -4,7 +4,7 @@ import pytesseract
 import cv2
 
 # Đường dẫn ảnh biển số
-img = cv2.imread('D:\\plate-recognition-main\\plate-recognition-main\\image7.jpg')
+img = cv2.imread('3.jpg')
 img = cv2.resize(img, (800, 600))  # Resize để tăng hiệu suất xử lý
 
 # Đường dẫn font chữ

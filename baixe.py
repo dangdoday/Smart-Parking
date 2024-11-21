@@ -3,6 +3,7 @@ import cv2
 import time
 import spidev
 import os
+import random
 
 # Cấu hình GPIO và các thông số
 LCD_PINS = {'RS': 23, 'E': 27, 'D4': 18, 'D5': 17, 'D6': 14, 'D7': 3, 'BL': 2}
@@ -35,9 +36,10 @@ spi.mode = 0x00
 # Biến toàn cục
 parking_lot = [0xFF] * 8
 total_slots = 64
-available_slots = total_slots
 car_images = {}  # Lưu thông tin ảnh ứng với vị trí xe
-
+car_positions = {}  # Lưu thông tin xe theo vị trí (vị trí: ID xe)
+entered_cars = []  # Lưu thứ tự xe đã vào bãi
+available_slots = total_slots  # Số chỗ trống ban đầu
 # Khởi tạo GPIO
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -144,7 +146,16 @@ def lcd_display_string(message, line):
     lcd_byte(LCD_LINE_1 if line == 1 else LCD_LINE_2, LCD_CMD)
     for char in message:
         lcd_byte(ord(char), LCD_CHR)
-
+# Tạo ID ngẫu nhiên cho xe
+def generate_car_id():
+    return f"CAR-{random.randint(1000, 9999)}"
+# Cập nhật LED matrix tại vị trí xe
+def update_led_for_slot(row, col, state):
+    if state:  # 1: Chỗ trống
+        parking_lot[row] |= (1 << (7 - col))
+    else:  # 0: Có xe
+        parking_lot[row] &= ~(1 << (7 - col))
+    update_matrix()
 # Ham cap nhat so luong cho trong hien thi tren LCD
 def update_lcd(available_slots):
     lcd_clear()
@@ -164,6 +175,8 @@ def measure_distance():
     GPIO.output(TRIG_PIN, True)
     time.sleep(0.00001)
     GPIO.output(TRIG_PIN, False)
+    pulse_start=time.time()
+    pulse_end = pulse_start
 
     while GPIO.input(ECHO_PIN) == 0:
         pulse_start = time.time()
@@ -200,6 +213,30 @@ def delete_image(slot):
             print(f"File not found: {car_images[slot]}")
 
 # Cho xe vào bãi đỗ
+# def car_enter():
+#     global available_slots
+#     if available_slots == 0:
+#         print("Bãi đã đầy!")
+#         return
+#     distance = measure_distance()
+#     if distance < 10:  # Kiểm tra xe ở gần
+#         for row in range(8):
+#             for col in range(8):
+#                 if parking_lot[row] & (1 << (7 - col)):
+#                     parking_lot[row] &= ~(1 << (7 - col))
+#                     slot = row * 8 + col  # Tính vị trí của xe
+#                     capture_image(slot)  # Chụp ảnh xe
+#                     available_slots -= 1 # Giam so cho trong
+#                     update_matrix() # Cap nhat ma tran LED
+#                     update_lcd(available_slots)  # Cap nhat LCD
+#                     open_gate() # Mo cong
+#                     motor_control(speed, 0) #mophong xe đang vao
+#                     time.sleep(2)
+#                     motor_control(0, 0)#dung dong co
+#                     close_gate()
+#                     return
+
+# Hàm cho xe vào bãi
 def car_enter():
     global available_slots
     if available_slots == 0:
@@ -209,49 +246,74 @@ def car_enter():
     if distance < 10:  # Kiểm tra xe ở gần
         for row in range(8):
             for col in range(8):
-                if parking_lot[row] & (1 << (7 - col)):
-                    parking_lot[row] &= ~(1 << (7 - col))
-                    slot = row * 8 + col  # Tính vị trí của xe
+                if parking_lot[row] & (1 << (7 - col)):  # Tìm vị trí trống
+                    slot = row * 8 + col
+                    car_id = generate_car_id()  # Sinh ID ngẫu nhiên
+                    car_positions[slot] = car_id  # Lưu ID xe vào vị trí
+                    entered_cars.append((slot, car_id))  # Lưu xe vào danh sách thứ tự
                     capture_image(slot)  # Chụp ảnh xe
-                    available_slots -= 1 # Giam so cho trong
-                    update_matrix() # Cap nhat ma tran LED
-                    update_lcd(available_slots)  # Cap nhat LCD
-                    open_gate() # Mo cong
-                    motor_control(speed, 0) #mophong xe đang vao
+                    available_slots -= 1
+                    update_led_for_slot(row, col, 0)  # Cập nhật LED matrix
+                    update_lcd(available_slots)  # Cập nhật LCD
+                    open_gate()
+                    motor_control(speed, 0)
                     time.sleep(2)
-                    motor_control(0, 0)#dung dong co
+                    motor_control(0, 0)
                     close_gate()
+                    print(f"Xe {car_id} vào vị trí {slot}")
                     return
 
-# Cho xe ra khỏi bãi đỗ
+# # Cho xe ra khỏi bãi đỗ
+# def car_exit():
+#     global available_slots
+#     if available_slots == total_slots:
+#         print("Bãi trống!")
+#         return
+#     for row in range(8):
+#         for col in range(8):
+#             if not parking_lot[row] & (1 << (7 - col)):
+#                 parking_lot[row] |= (1 << (7 - col))
+#                 slot = row * 8 + col  # Tính vị trí của xe
+#                 delete_image(slot)  # Xóa ảnh xe
+#                 available_slots += 1 # Tang so cho trong
+#                 update_matrix() # Cap nhat ma tran LED
+#                 update_lcd(available_slots)  # Cap nhat LCD
+#                 open_gate()
+#                 motor_control(speed, 1)  # mophong xe đang ra
+#                 time.sleep(2)
+#                 motor_control(0, 1) # dung dong co
+#                 close_gate()
+#                 return
+# Hàm cho xe rời bãi ngẫu nhiên từ danh sách đã vào
 def car_exit():
     global available_slots
     if available_slots == total_slots:
         print("Bãi trống!")
         return
-    for row in range(8):
-        for col in range(8):
-            if not parking_lot[row] & (1 << (7 - col)):
-                parking_lot[row] |= (1 << (7 - col))
-                slot = row * 8 + col  # Tính vị trí của xe
-                delete_image(slot)  # Xóa ảnh xe
-                available_slots += 1 # Tang so cho trong
-                update_matrix() # Cap nhat ma tran LED
-                update_lcd(available_slots)  # Cap nhat LCD
-                open_gate()
-                motor_control(speed, 1)  # mophong xe đang ra
-                time.sleep(2)
-                motor_control(0, 1) # dung dong co
-                close_gate()
-                return
-
+    if entered_cars:
+        random_index = random.randint(0, len(entered_cars) - 1)  # Chọn ngẫu nhiên xe
+        slot, car_id = entered_cars.pop(random_index)  # Lấy thông tin xe và xóa khỏi danh sách
+        car_positions.pop(slot, None)  # Xóa xe khỏi danh sách vị trí
+        row, col = divmod(slot, 8)
+        delete_image(slot)  # Xóa ảnh xe
+        available_slots += 1
+        update_led_for_slot(row, col, 1)  # Cập nhật LED matrix (bật đèn vị trí này)
+        update_lcd(available_slots)  # Cập nhật LCD
+        open_gate()
+        motor_control(speed, 1)
+        time.sleep(2)
+        motor_control(0, 1)
+        close_gate()
+        print(f"Xe {car_id} rời vị trí {slot}")
 # Chương trình chính
 def main():
     max7219_init()  # Khởi tạo LED matrix
+    update_matrix()
     lcd_init()  # Khởi tạo màn hình LCD
     GPIO.setup(LIGHT_SS, GPIO.IN, GPIO.PUD_UP)  # Cấu hình cảm biến ánh sáng
     try:
         while True:
+
             if GPIO.input(LIGHT_SS) == 0:  # Kiểm tra nếu môi trường sáng (cảm biến ở mức thấp)
                 GPIO.output(RELAY_1, GPIO.LOW)  # Tắt Relay 1
                 GPIO.output(RELAY_2, GPIO.LOW)  # Tắt Relay 2
@@ -259,6 +321,7 @@ def main():
                 GPIO.output(RELAY_1, GPIO.HIGH)  # Bật Relay 1
                 time.sleep(1)  # Chờ 1 giây
                 GPIO.output(RELAY_2, GPIO.HIGH)  # Bật Relay 2
+
             if GPIO.input(BTS["BT1"]) == GPIO.LOW:
                 car_enter()
             elif GPIO.input(BTS["BT2"]) == GPIO.LOW:
@@ -270,6 +333,6 @@ def main():
         lcd_clear()
         GPIO.cleanup()
         max7219_write(0x0C, 0x00)  # Tắt LED matrix
-
+        spi.close()
 if __name__ == "__main__":
     main()
