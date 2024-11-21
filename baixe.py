@@ -76,7 +76,6 @@ def motor_control(speed, direction):
         speed = 100 - speed  # Đảo ngược tốc độ
     pwm.ChangeDutyCycle(speed)  # Cập nhật độ rộng xung PWM để điều chỉnh tốc độ động cơ
 
-
 # Tạo thư mục lưu ảnh nếu chưa tồn tại
 if not os.path.exists(SAVE_PATH):
     os.makedirs(SAVE_PATH)
@@ -212,29 +211,6 @@ def delete_image(slot):
         except FileNotFoundError:
             print(f"File not found: {car_images[slot]}")
 
-# Cho xe vào bãi đỗ
-# def car_enter():
-#     global available_slots
-#     if available_slots == 0:
-#         print("Bãi đã đầy!")
-#         return
-#     distance = measure_distance()
-#     if distance < 10:  # Kiểm tra xe ở gần
-#         for row in range(8):
-#             for col in range(8):
-#                 if parking_lot[row] & (1 << (7 - col)):
-#                     parking_lot[row] &= ~(1 << (7 - col))
-#                     slot = row * 8 + col  # Tính vị trí của xe
-#                     capture_image(slot)  # Chụp ảnh xe
-#                     available_slots -= 1 # Giam so cho trong
-#                     update_matrix() # Cap nhat ma tran LED
-#                     update_lcd(available_slots)  # Cap nhat LCD
-#                     open_gate() # Mo cong
-#                     motor_control(speed, 0) #mophong xe đang vao
-#                     time.sleep(2)
-#                     motor_control(0, 0)#dung dong co
-#                     close_gate()
-#                     return
 
 # Hàm cho xe vào bãi
 def car_enter():
@@ -263,27 +239,6 @@ def car_enter():
                     print(f"Xe {car_id} vào vị trí {slot}")
                     return
 
-# # Cho xe ra khỏi bãi đỗ
-# def car_exit():
-#     global available_slots
-#     if available_slots == total_slots:
-#         print("Bãi trống!")
-#         return
-#     for row in range(8):
-#         for col in range(8):
-#             if not parking_lot[row] & (1 << (7 - col)):
-#                 parking_lot[row] |= (1 << (7 - col))
-#                 slot = row * 8 + col  # Tính vị trí của xe
-#                 delete_image(slot)  # Xóa ảnh xe
-#                 available_slots += 1 # Tang so cho trong
-#                 update_matrix() # Cap nhat ma tran LED
-#                 update_lcd(available_slots)  # Cap nhat LCD
-#                 open_gate()
-#                 motor_control(speed, 1)  # mophong xe đang ra
-#                 time.sleep(2)
-#                 motor_control(0, 1) # dung dong co
-#                 close_gate()
-#                 return
 # Hàm cho xe rời bãi ngẫu nhiên từ danh sách đã vào
 def car_exit():
     global available_slots
