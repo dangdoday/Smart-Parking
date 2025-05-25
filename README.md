@@ -1,7 +1,5 @@
 # Smart Parking System
 
-Project of the Machine Learning (MAT3533) course in the Autumn Semester 2024 - 2025 at VNU University of Science.
-
 ## Features
 
 - **License Plate Recognition**: Automatically detects and reads vehicle license plates using image processing techniques.
